@@ -13,7 +13,8 @@ export default function Edit() {
     useEffect(() => {
         async function fetchData() {
             const id = params.id
-            const response = await fetch(`${process.env.REACT_APP_YOUR_HOSTNAME}/record/${id}`)
+            // ✅ Use /api prefix for Nginx proxy
+            const response = await fetch(`/api/record/${id}`)
             if (!response.ok) {
                 const message = `An error occurred: ${response.statusText}`
                 window.alert(message)
@@ -31,8 +32,6 @@ export default function Edit() {
         }
 
         fetchData()
-
-        return
     }, [params.id, navigate])
 
     function updateForm(value) {
@@ -45,7 +44,8 @@ export default function Edit() {
         e.preventDefault()
 
         const editedPerson = { ...form }
-        const response = await fetch(`${process.env.REACT_APP_YOUR_HOSTNAME}/update/${params.id}`, {
+        // ✅ Use /api prefix for Nginx proxy
+        const response = await fetch(`/api/update/${params.id}`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json"

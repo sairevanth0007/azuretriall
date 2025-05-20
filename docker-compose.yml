@@ -1,0 +1,28 @@
+services:
+  client:
+    build:
+      context: ./client
+    container_name: azuretriall-client
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_YOUR_HOSTNAME=http://server:5000
+
+  server:
+    build:
+      context: ./server
+    container_name: azuretriall-server
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+
+  nginx:
+    build:
+      context: ./nginx
+    container_name: azuretriall-nginx
+    ports:
+      - "80:80"
+    depends_on:
+      - client
+      - server

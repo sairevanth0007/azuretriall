@@ -19,7 +19,8 @@ export default function Create() {
         e.preventDefault()
 
         const newPerson = { ...form }
-        const response = await fetch(`${process.env.REACT_APP_YOUR_HOSTNAME}/record/add`, {
+        // ✅ Use /api prefix for Nginx proxy
+        const response = await fetch("/api/record/add", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json"
@@ -36,6 +37,7 @@ export default function Create() {
         setForm({ name: "", position: "", level: "" })
         navigate("/")
     }
+
 
     return (
         <div>

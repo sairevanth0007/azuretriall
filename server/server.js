@@ -14,10 +14,6 @@ app.use(express.static(path.join(__dirname, 'client', 'build')));
 // API Routes
 app.use(require("./routes/record"));
 
-// Fallback route to serve React app (SPA)
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "client", "build", "index.html"));
-});
 
 // Start server after MongoDB connection
 const dbo = require("./db/conn");

@@ -25,38 +25,34 @@ const Record = (props) => {
 export default function RecordList() {
     const [records, setRecords] = useState([])
 
-    useEffect(() => {
-        async function getRecords() {
-            const response = await fetch(`${process.env.REACT_APP_YOUR_HOSTNAME}/record/`)
+useEffect(() => {
+  async function getRecords() {
+    const response = await fetch("/api/record/") // ✅ Updated URL
 
-            if (!response.ok) {
-                const message = `An error occurred: ${response.statusText}`
-                window.alert(message)
-                return
-            }
-
-            const records = await response.json()
-            setRecords(records)
-        }
-
-        getRecords()
-
-        return
-    }, [records.length])
-
-    async function deleteRecord(id) {
-        const result = window.confirm("Will this employee be removed from the list?")
-        if (!result) {
-            return
-        }
-
-        await fetch(`${process.env.REACT_APP_YOUR_HOSTNAME}/${id}`, {
-            method: "DELETE"
-        })
-
-        const newRecords = records.filter((record) => record._id !== id)
-        setRecords(newRecords)
+    if (!response.ok) {
+      const message = `An error occurred: ${response.statusText}`
+      window.alert(message)
+      return
     }
+
+    const records = await response.json()
+    setRecords(records)
+  }
+
+  getRecords()
+}, [records.length])
+
+async function deleteRecord(id) {
+  const result = window.confirm("Will this employee be removed from the list?")
+  if (!result) return
+
+  await fetch(`/api/${id}`, { // ✅ Updated URL
+    method: "DELETE"
+  })
+
+  const newRecords = records.filter((record) => record._id !== id)
+  setRecords(newRecords)
+}
 
     function recordList() {
         return records.map((record) => {
