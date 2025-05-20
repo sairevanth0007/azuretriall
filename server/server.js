@@ -1,29 +1,34 @@
+require("dotenv").config(); // Load env vars
 const express = require("express");
 const app = express();
 const cors = require("cors");
-const path = require("path"); // Needed to serve React files
-require("dotenv").config();
+const helmet = require("helmet");
+const path = require("path");
 const port = process.env.PORT || 5000;
 
+// Middleware
 app.use(cors());
 app.use(express.json());
+app.use(helmet());
+app.set("trust proxy", 1); // For reverse proxy (Nginx)
 
-// Serve static files from the React app (after Docker build)
-app.use(express.static(path.join(__dirname, 'client', 'build')));
+// Routes
+app.use("/api", require("./routes/record"));
 
-// API Routes
-app.use(require("./routes/record"));
-
-// Fallback route to serve React app (SPA)
+// Optional: Fallback for SPA (if not using Nginx for static files)
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "client", "build", "index.html"));
+  res.sendFile(path.join(__dirname, "../client/build", "index.html"));
 });
 
-// Start server after MongoDB connection
+// MongoDB Connection
 const dbo = require("./db/conn");
 dbo.connectToMongoDB(function (error) {
-  if (error) throw error;
+  if (error) {
+    console.error("MongoDB connection error:", error);
+    process.exit(1); // Exit on DB failure
+  }
+
   app.listen(port, () => {
-    console.log("Server is running on port: " + port);
+    console.log(`✅ Server is running on port: ${port}`);
   });
 });
