@@ -1,0 +1,52 @@
+name: Deploy MERN App to Azure
+
+on:
+  push:
+    branches:
+      - main  # Trigger workflow on pushes to main branch
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout Code
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # 2. Set up Docker Buildx
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      # 3. Log in to Azure Container Registry (ACR)
+      - name: Log in to Azure Container Registry
+        uses: azure/docker-login@v1
+        with:
+          login-server: ${{ secrets.REGISTRY_LOGIN_SERVER }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      # 4. Build and Push Docker Image to ACR
+      - name: Build and Push Docker Image
+        run: |
+          docker build -t ${{ secrets.REGISTRY_LOGIN_SERVER }}/mern-app:latest .
+          docker push ${{ secrets.REGISTRY_LOGIN_SERVER }}/mern-app:latest
+
+      # 5. Azure Login
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # 6. Deploy to Azure Container Instances (ACI)
+      - name: Deploy to Azure Container Instances
+        run: |
+          az container create \
+            --resource-group my-resource-group \
+            --name mern-app \
+            --image ${{ secrets.REGISTRY_LOGIN_SERVER }}/mern-app:latest \
+            --dns-name-label mern-app-${{ github.run_id }} \
+            --ports 80 \
+            --environment-variables \
+              ATLAS_URI=${{ secrets.ATLAS_URI }} \
+              PORT=5000
