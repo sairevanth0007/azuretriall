@@ -1,16 +1,9 @@
-# client/Dockerfile
 FROM node:18-alpine
-
-WORKDIR /app
-
+WORKDIR /usr/src/app
 COPY package*.json ./
 RUN npm install
-
-# Update browserslist database
-RUN npx update-browserslist-db@latest
-
 COPY . .
-
+RUN npm run build
 EXPOSE 3000
-
-CMD ["npm", "start"]
+RUN npm install -g serve # This is good
+CMD ["serve", "-s", "build", "-l", "3000"] # This is the critical part
