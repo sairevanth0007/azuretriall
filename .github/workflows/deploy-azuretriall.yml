@@ -61,6 +61,7 @@ jobs:
             --environment-variables ATLAS_URI=${{ secrets.ATLAS_URI }} \
             --registry-username ${{ secrets.REGISTRY_USERNAME }} \
             --registry-password ${{ secrets.REGISTRY_PASSWORD }} \
+            --os-type Linux \   
             --restart-policy OnFailure
 
       # 9. Deploy Frontend Container
@@ -73,6 +74,7 @@ jobs:
             --ports 3000 \
             --registry-username ${{ secrets.REGISTRY_USERNAME }} \
             --registry-password ${{ secrets.REGISTRY_PASSWORD }} \
+            --os-type Linux \   
             --restart-policy OnFailure
 
       # 10. Deploy Nginx Reverse Proxy Container
@@ -87,4 +89,5 @@ jobs:
             --registry-username ${{ secrets.REGISTRY_USERNAME }} \
             --registry-password ${{ secrets.REGISTRY_PASSWORD }} \
             --depends-on azuretriall-frontend azuretriall-backend \
+            --os-type Linux \   
             --restart-policy OnFailure
