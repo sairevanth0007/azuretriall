@@ -3,7 +3,7 @@ name: Deploy Azuretrall App with Nginx to Azure
 on:
   push:
     branches:
-      - main
+      - main  # Trigger workflow on pushes to main branch
 
 jobs:
   build-deploy:
@@ -59,6 +59,8 @@ jobs:
             --image ${{ secrets.REGISTRY_LOGIN_SERVER }}/azuretriall-backend:latest \
             --ports 5000 \
             --environment-variables ATLAS_URI=${{ secrets.ATLAS_URI }} \
+            --registry-username ${{ secrets.REGISTRY_USERNAME }} \
+            --registry-password ${{ secrets.REGISTRY_PASSWORD }} \
             --restart-policy OnFailure
 
       # 9. Deploy Frontend Container
@@ -69,6 +71,8 @@ jobs:
             --name azuretriall-frontend \
             --image ${{ secrets.REGISTRY_LOGIN_SERVER }}/azuretriall-frontend:latest \
             --ports 3000 \
+            --registry-username ${{ secrets.REGISTRY_USERNAME }} \
+            --registry-password ${{ secrets.REGISTRY_PASSWORD }} \
             --restart-policy OnFailure
 
       # 10. Deploy Nginx Reverse Proxy Container
@@ -80,5 +84,7 @@ jobs:
             --image ${{ secrets.REGISTRY_LOGIN_SERVER }}/azuretriall-nginx:latest \
             --ports 80 \
             --dns-name-label azuretriall-${{ github.run_id }} \
-            --restart-policy OnFailure \
-            --depends-on azuretriall-frontend azuretriall-backend
+            --registry-username ${{ secrets.REGISTRY_USERNAME }} \
+            --registry-password ${{ secrets.REGISTRY_PASSWORD }} \
+            --depends-on azuretriall-frontend azuretriall-backend \
+            --restart-policy OnFailure
