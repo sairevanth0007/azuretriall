@@ -1,4 +1,4 @@
-name: Deploy MERN App to Azure
+name: Deploy Azuretrall App with Nginx to Azure
 
 on:
   push:
@@ -18,7 +18,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
-      # 3. Log in to Azure Container Registry (ACR)
+      # 3. Log in to Azure Container Registry
       - name: Log in to Azure Container Registry
         uses: azure/docker-login@v1
         with:
@@ -26,27 +26,30 @@ jobs:
           username: ${{ secrets.REGISTRY_USERNAME }}
           password: ${{ secrets.REGISTRY_PASSWORD }}
 
-      # 4. Build and Push Docker Image to ACR
-      - name: Build and Push Docker Image
-        run: |
-          docker build -t ${{ secrets.REGISTRY_LOGIN_SERVER }}/mern-app:latest .
-          docker push ${{ secrets.REGISTRY_LOGIN_SERVER }}/mern-app:latest
+      # 4. Build and Push All Images to ACR
+      - name: Build and Push Docker Images
+        uses: azure/docker-compose-build-push-action@v1
+        with:
+          azure-subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          resource-group: my-resource-group
+          registry-login-server: ${{ secrets.REGISTRY_LOGIN_SERVER }}
+          registry-username: ${{ secrets.REGISTRY_USERNAME }}
+          registry-password: ${{ secrets.REGISTRY_PASSWORD }}
+          compose-file-path: "docker-compose.yml"
 
-      # 5. Azure Login
+      # 5. Deploy to Azure Container Instances (ACI) via Docker Compose
       - name: Azure Login
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # 6. Deploy to Azure Container Instances (ACI)
-      - name: Deploy to Azure Container Instances
+      - name: Deploy Entire Stack to Azure
         run: |
-          az container create \
+          az container compose create \
             --resource-group my-resource-group \
-            --name mern-app \
-            --image ${{ secrets.REGISTRY_LOGIN_SERVER }}/mern-app:latest \
-            --dns-name-label mern-app-${{ github.run_id }} \
-            --ports 80 \
-            --environment-variables \
-              ATLAS_URI=${{ secrets.ATLAS_URI }} \
-              PORT=5000
+            --name azuretriall-app \
+            --file docker-compose.yml \
+            --registry-login-server ${{ secrets.REGISTRY_LOGIN_SERVER }} \
+            --registry-username ${{ secrets.REGISTRY_USERNAME }} \
+            --registry-password ${{ secrets.REGISTRY_PASSWORD }} \
+            --dns-name-label azuretriall-${{ github.run_id }}
