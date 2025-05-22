@@ -1,12 +1,23 @@
-name: Deploy Azuretrall App with Nginx to Azure
+name: Deploy AzureTriall App with Nginx to Azure ACI Group
 
 on:
   push:
     branches:
       - main  # Trigger workflow on pushes to main branch
 
+env:
+  # Define common environment variables here for easier management
+  REGISTRY_LOGIN_SERVER: ${{ secrets.REGISTRY_LOGIN_SERVER }}
+  REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+  # REGISTRY_PASSWORD is used directly from secrets where needed for security
+  ATLAS_URI: ${{ secrets.ATLAS_URI }}
+  RESOURCE_GROUP_NAME: my-resource-group # IMPORTANT: Make this a secret or a fixed value for your RG
+  ACI_LOCATION: eastus # IMPORTANT: Make this a secret or set your desired region
+  ACI_CONTAINER_GROUP_NAME: azuretriall-app-group # Name for the ACI container group
+  DNS_NAME_LABEL_PREFIX: azuretriall # Prefix for the DNS label
+
 jobs:
-  build-deploy:
+  build-and-deploy: # Combined job name
     runs-on: ubuntu-latest
 
     steps:
@@ -22,27 +33,30 @@ jobs:
       - name: Log in to Azure Container Registry
         uses: azure/docker-login@v1
         with:
-          login-server: ${{ secrets.REGISTRY_LOGIN_SERVER }}
-          username: ${{ secrets.REGISTRY_USERNAME }}
+          login-server: ${{ env.REGISTRY_LOGIN_SERVER }}
+          username: ${{ env.REGISTRY_USERNAME }}
           password: ${{ secrets.REGISTRY_PASSWORD }}
 
       # 4. Build and Push Frontend Image
       - name: Build and Push Frontend Image
         run: |
-          docker build -t ${{ secrets.REGISTRY_LOGIN_SERVER }}/azuretriall-frontend:latest ./client
-          docker push ${{ secrets.REGISTRY_LOGIN_SERVER }}/azuretriall-frontend:latest
+          docker build -t ${{ env.REGISTRY_LOGIN_SERVER }}/azuretriall-frontend:latest -t ${{ env.REGISTRY_LOGIN_SERVER }}/azuretriall-frontend:${{ github.sha }} ./client
+          docker push ${{ env.REGISTRY_LOGIN_SERVER }}/azuretriall-frontend:latest
+          docker push ${{ env.REGISTRY_LOGIN_SERVER }}/azuretriall-frontend:${{ github.sha }}
 
       # 5. Build and Push Backend Image
       - name: Build and Push Backend Image
         run: |
-          docker build -t ${{ secrets.REGISTRY_LOGIN_SERVER }}/azuretriall-backend:latest ./server
-          docker push ${{ secrets.REGISTRY_LOGIN_SERVER }}/azuretriall-backend:latest
+          docker build -t ${{ env.REGISTRY_LOGIN_SERVER }}/azuretriall-backend:latest -t ${{ env.REGISTRY_LOGIN_SERVER }}/azuretriall-backend:${{ github.sha }} ./server
+          docker push ${{ env.REGISTRY_LOGIN_SERVER }}/azuretriall-backend:latest
+          docker push ${{ env.REGISTRY_LOGIN_SERVER }}/azuretriall-backend:${{ github.sha }}
 
       # 6. Build and Push Nginx Image
       - name: Build and Push Nginx Image
         run: |
-          docker build -t ${{ secrets.REGISTRY_LOGIN_SERVER }}/azuretriall-nginx:latest ./nginx
-          docker push ${{ secrets.REGISTRY_LOGIN_SERVER }}/azuretriall-nginx:latest
+          docker build -t ${{ env.REGISTRY_LOGIN_SERVER }}/azuretriall-nginx:latest -t ${{ env.REGISTRY_LOGIN_SERVER }}/azuretriall-nginx:${{ github.sha }} ./nginx
+          docker push ${{ env.REGISTRY_LOGIN_SERVER }}/azuretriall-nginx:latest
+          docker push ${{ env.REGISTRY_LOGIN_SERVER }}/azuretriall-nginx:${{ github.sha }}
 
       # 7. Azure Login
       - name: Azure Login
@@ -50,44 +64,62 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # 8. Deploy Backend Container
-      - name: Deploy Backend to ACI
+      # 8. Prepare ACI Deployment YAML
+      - name: Prepare ACI Deployment YAML
         run: |
-          az container create \
-            --resource-group my-resource-group \
-            --name azuretriall-backend \
-            --image ${{ secrets.REGISTRY_LOGIN_SERVER }}/azuretriall-backend:latest \
-            --ports 5000 \
-            --environment-variables ATLAS_URI=${{ secrets.ATLAS_URI }} \
-            --registry-username ${{ secrets.REGISTRY_USERNAME }} \
-            --registry-password ${{ secrets.REGISTRY_PASSWORD }} \
-            --os-type Linux \   
-            --restart-policy OnFailure
+          # Generate a unique DNS label. Shorten run_id if it's too long.
+          # Azure DNS labels have length and character restrictions.
+          RUN_ID_SUFFIX=$(echo "${{ github.run_id }}-${{ github.run_attempt }}" | tr -dc 'a-z0-9' | cut -c1-10)
+          export DNS_NAME_LABEL="${{ env.DNS_NAME_LABEL_PREFIX }}-${RUN_ID_SUFFIX}"
 
-      # 9. Deploy Frontend Container
-      - name: Deploy Frontend to ACI
-        run: |
-          az container create \
-            --resource-group my-resource-group \
-            --name azuretriall-frontend \
-            --image ${{ secrets.REGISTRY_LOGIN_SERVER }}/azuretriall-frontend:latest \
-            --ports 3000 \
-            --registry-username ${{ secrets.REGISTRY_USERNAME }} \
-            --registry-password ${{ secrets.REGISTRY_PASSWORD }} \
-            --os-type Linux \   
-            --restart-policy OnFailure
+          echo "Using DNS Label: $DNS_NAME_LABEL"
+          echo "Using ACI Group Name: ${{ env.ACI_CONTAINER_GROUP_NAME }}"
+          echo "Using Resource Group: ${{ env.RESOURCE_GROUP_NAME }}"
+          echo "Using Location: ${{ env.ACI_LOCATION }}"
 
-      # 10. Deploy Nginx Reverse Proxy Container
-      - name: Deploy Nginx to ACI
+          # Substitute environment variables into the template
+          # Ensure envsubst is available (it is on ubuntu-latest)
+          envsubst < .azure/aci-deployment.template.yml > .azure/aci-deployment.generated.yml
+
+          echo "Generated ACI Deployment YAML:"
+          cat .azure/aci-deployment.generated.yml # For debugging, shows the generated file
+        env: # Explicitly pass variables for envsubst
+          REGISTRY_LOGIN_SERVER: ${{ env.REGISTRY_LOGIN_SERVER }}
+          REGISTRY_USERNAME: ${{ env.REGISTRY_USERNAME }}
+          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }} # This will be embedded in the YAML for ACI to use
+          ATLAS_URI: ${{ env.ATLAS_URI }}
+          ACI_LOCATION: ${{ env.ACI_LOCATION }}
+          ACI_CONTAINER_GROUP_NAME: ${{ env.ACI_CONTAINER_GROUP_NAME }}
+          # DNS_NAME_LABEL is set in the script above and exported
+
+      # 9. Deploy to Azure Container Instances Group
+      - name: Deploy to ACI Group
         run: |
+          echo "Checking for existing container group ${{ env.ACI_CONTAINER_GROUP_NAME }} in RG ${{ env.RESOURCE_GROUP_NAME }}..."
+          # Attempt to delete the existing container group for a clean deployment.
+          # This will cause brief downtime.
+          # For zero-downtime, more complex strategies like blue/green with Azure Traffic Manager are needed.
+          if az container show --name ${{ env.ACI_CONTAINER_GROUP_NAME }} --resource-group ${{ env.RESOURCE_GROUP_NAME }} > /dev/null 2>&1; then
+            echo "Container group ${{ env.ACI_CONTAINER_GROUP_NAME }} found. Deleting..."
+            az container delete --name ${{ env.ACI_CONTAINER_GROUP_NAME }} --resource-group ${{ env.RESOURCE_GROUP_NAME }} --yes
+            echo "Deletion initiated. Waiting for a moment before recreating..."
+            sleep 30 # Give Azure some time to process the deletion
+          else
+            echo "Container group ${{ env.ACI_CONTAINER_GROUP_NAME }} not found. Proceeding with creation."
+          fi
+
+          echo "Deploying new container group ${{ env.ACI_CONTAINER_GROUP_NAME }} using .azure/aci-deployment.generated.yml..."
           az container create \
-            --resource-group my-resource-group \
-            --name azuretriall-nginx \
-            --image ${{ secrets.REGISTRY_LOGIN_SERVER }}/azuretriall-nginx:latest \
-            --ports 80 \
-            --dns-name-label azuretriall-${{ github.run_id }} \
-            --registry-username ${{ secrets.REGISTRY_USERNAME }} \
-            --registry-password ${{ secrets.REGISTRY_PASSWORD }} \
-            --depends-on azuretriall-frontend azuretriall-backend \
-            --os-type Linux \   
-            --restart-policy OnFailure
+            --resource-group ${{ env.RESOURCE_GROUP_NAME }} \
+            --file .azure/aci-deployment.generated.yml
+
+          echo "Deployment of ${{ env.ACI_CONTAINER_GROUP_NAME }} initiated."
+          echo "Fetching FQDN..."
+          # Wait a bit for the FQDN to be available
+          sleep 60
+          FQDN=$(az container show \
+            --resource-group ${{ env.RESOURCE_GROUP_NAME }} \
+            --name ${{ env.ACI_CONTAINER_GROUP_NAME }} \
+            --query ipAddress.fqdn \
+            --output tsv)
+          echo "Application should be available at: http://$FQDN"
