@@ -5,8 +5,8 @@ services:
     container_name: azuretriall-client
     ports:
       - "3000:3000"
-    environment:
-      - REACT_APP_YOUR_HOSTNAME=http://server:5000
+    # environment:
+    #   - REACT_APP_YOUR_HOSTNAME=http://server:5000
 
   server:
     build:
