@@ -71,15 +71,17 @@ jobs:
           # Azure DNS labels have length and character restrictions.
           RUN_ID_SUFFIX=$(echo "${{ github.run_id }}-${{ github.run_attempt }}" | tr -dc 'a-z0-9' | cut -c1-10)
           export DNS_NAME_LABEL="${{ env.DNS_NAME_LABEL_PREFIX }}-${RUN_ID_SUFFIX}"
+          export GITHUB_SHA_TAG=${{ github.sha }}
 
           echo "Using DNS Label: $DNS_NAME_LABEL"
+          echo "Using Image Tag: $GITHUB_SHA_TAG"
           echo "Using ACI Group Name: ${{ env.ACI_CONTAINER_GROUP_NAME }}"
           echo "Using Resource Group: ${{ env.RESOURCE_GROUP_NAME }}"
           echo "Using Location: ${{ env.ACI_LOCATION }}"
 
           # Substitute environment variables into the template
           # Ensure envsubst is available (it is on ubuntu-latest)
-          envsubst < .azure/aci-deployment.template.yml > .azure/aci-deployment.generated.yml
+          envsubst '${ACI_LOCATION} ${ACI_CONTAINER_GROUP_NAME} ${REGISTRY_LOGIN_SERVER} ${REGISTRY_USERNAME} ${REGISTRY_PASSWORD} ${ATLAS_URI} ${DNS_NAME_LABEL} ${GITHUB_SHA_TAG}' < .azure/aci-deployment.template.yml > .azure/aci-deployment.generated.yml
 
           echo "Generated ACI Deployment YAML:"
           cat .azure/aci-deployment.generated.yml # For debugging, shows the generated file
@@ -90,6 +92,7 @@ jobs:
           ATLAS_URI: ${{ env.ATLAS_URI }}
           ACI_LOCATION: ${{ env.ACI_LOCATION }}
           ACI_CONTAINER_GROUP_NAME: ${{ env.ACI_CONTAINER_GROUP_NAME }}
+          DNS_NAME_LABEL_PREFIX: ${{ env.DNS_NAME_LABEL_PREFIX }}
           # DNS_NAME_LABEL is set in the script above and exported
 
       # 9. Deploy to Azure Container Instances Group
