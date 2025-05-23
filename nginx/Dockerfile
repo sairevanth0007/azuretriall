@@ -1,6 +1,14 @@
-# nginx/Dockerfile (This builds the image for ACI)
+# nginx/Dockerfile
 FROM nginx:latest
-RUN rm -f /etc/nginx/nginx.conf # Use -f to avoid error if not exists (though it should)
-COPY nginx.conf /etc/nginx/nginx.conf # This now copies the ACI-specific config
+
+# Remove default Nginx config
+RUN rm /etc/nginx/nginx.conf
+
+# Copy your custom config
+COPY nginx.conf /etc/nginx/
+
+# Expose port 80
 EXPOSE 80
+
+# Start Nginx
 CMD ["nginx", "-g", "daemon off;"]
